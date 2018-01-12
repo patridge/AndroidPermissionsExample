@@ -58,76 +58,83 @@ namespace SpikeAndroidPermissions
         }
         public void AskForCameraPermission()
         {
-            if (CheckSelfPermission(Manifest.Permission.Camera) != Permission.Granted)
+            if ((int)Build.VERSION.SdkInt < 23)
             {
-                // If we need multiple permissions, we would check against all of them.
-                if (ShouldShowRequestPermissionRationale(Manifest.Permission.Camera))
+                Log.Info(TAG, "Pre-dates Android's new permission model. Installation _is_ permission.");
+                TakePicture();
+                return;
+            }
+
+            // If we need multiple permissions, we would check against all of them.
+            if (CheckSelfPermission(Manifest.Permission.Camera) == Permission.Granted)
+            {
+                Log.Info(TAG, "Already have permission.");
+
+                TakePicture();
+                return;
+            }
+
+            // If we need multiple permissions, we would check against all of them.
+            if (ShouldShowRequestPermissionRationale(Manifest.Permission.Camera))
+            {
+                // If user has previously denied and we ask again, we should justify why we need the permission before the next request.
+                // Also, if user has explicitly denied our app the given permission in the Settings app (even if you haven't asked yet).
+                // (e.g., "You keep clicking "DENY" on camera permission, but you also keep clicking the camera button!")
+                // > (Android docs) Note: If the user turned down the permission request in the past and chose the **Don't ask again** option in the permission request system dialog, this method returns false. The method also returns false if a device policy prohibits the app from having that permission.
+                Log.Info(TAG, "Need to show permission explanation.");
+
+                ShowCameraPermissionRationale(
+                    () => {
+                        Log.Info(TAG, "Successfully convinced user to reconsider. Ask again via Android.");
+
+                        RequestPermissions(new[] { Manifest.Permission.Camera }, ButtonClickCameraPermissionRequestCode);
+                    },
+                    () => {
+                        Log.Info(TAG, "Couldn't convince them to allow camera use. Might be time to disable this feature.");
+
+                        var cannotProceedWithoutPermissionAlert = new AlertDialog.Builder(this)
+                            .SetMessage("Without permission to use the camera, you can't take pictures.")
+                            .SetPositiveButton("Okay", (s, a) => { })
+                            .Create();
+                        cannotProceedWithoutPermissionAlert.Show();
+                    }
+                );
+            }
+            else
+            {
+                if (hasUserBlockedUsFromRequestingCameraPermission)
                 {
-                    // If user has previously denied and we ask again, we should justify why we need the permission before the next request.
-                    // Also, if user has explicitly denied our app the given permission in the Settings app (even if you haven't asked yet).
-                    // (e.g., "You keep clicking "DENY" on camera permission, but you also keep clicking the camera button!")
-                    // > (Android docs) Note: If the user turned down the permission request in the past and chose the **Don't ask again** option in the permission request system dialog, this method returns false. The method also returns false if a device policy prohibits the app from having that permission.
-                    Log.Info(TAG, "Need to show permission explanation.");
+                    // Requesting under "Don't ask again" mode will immediate return Permission.Denied in result handler.
+                    // User must explicitly give us permission in the app's Settings now.
 
                     ShowCameraPermissionRationale(
-                        () => {
-                            Log.Info(TAG, "Successfully convinced user to reconsider. Ask again via Android.");
+                        () =>
+                        {
+                            Log.Info(TAG, "Despite telling us to never ask again, we convinced them to allow camera use. Send them to Settings to allow it.");
 
-                            RequestPermissions(new[] { Manifest.Permission.Camera }, ButtonClickCameraPermissionRequestCode);
+                            // TODO: Would be worth showing the user what they need to do in Settings to remedy the permission issue.
+                            //       "Under Permissions in the Android Settings for Awesome Camera, you'll have to enable the Camera permission."
+
+                            var intent = new Intent(Android.Provider.Settings.ActionApplicationDetailsSettings, Android.Net.Uri.FromParts("package", this.PackageName, null));
+                            intent.AddFlags(ActivityFlags.NewTask);
+                            StartActivity(intent);
+
+                            // We could set up an async delayed check for the permission here and try to re-launch our app, if allowed.
                         },
-                        () => {
-                            Log.Info(TAG, "Couldn't convince them to allow camera use. Might be time to disable this feature.");
-
-                            var cannotProceedWithoutPermissionAlert = new AlertDialog.Builder(this)
-                                .SetMessage("Without permission to use the camera, you can't take pictures.")
-                                .SetPositiveButton("Okay", (s, a) => { })
-                                .Create();
-                            cannotProceedWithoutPermissionAlert.Show();
+                        () =>
+                        {
+                            Log.Info(TAG, "They still _really_ don't want us to ask for camera permission.");
                         }
                     );
                 }
                 else
                 {
-                    if (hasUserBlockedUsFromRequestingCameraPermission)
-                    {
-                        // Requesting under "Don't ask again" mode will immediate return Permission.Denied in result handler.
-                        // User must explicitly give us permission in the app's Settings now.
+                    Log.Info(TAG, "Can just ask for permission.");
 
-                        ShowCameraPermissionRationale(
-                            () =>
-                            {
-                                Log.Info(TAG, "Despite telling us to never ask again, we convinced them to allow camera use. Send them to Settings to allow it.");
-
-                                // TODO: Would be worth showing the user what they need to do in Settings to remedy the permission issue.
-                                //       "Under Permissions in the Android Settings for Awesome Camera, you'll have to enable the Camera permission."
-
-                                var intent = new Intent(Android.Provider.Settings.ActionApplicationDetailsSettings, Android.Net.Uri.FromParts("package", this.PackageName, null));
-                                intent.AddFlags(ActivityFlags.NewTask);
-                                StartActivity(intent);
-
-                                // We could set up an async delayed check for the permission here and try to re-launch our app, if allowed.
-                            },
-                            () =>
-                            {
-                                Log.Info(TAG, "They still _really_ don't want us to ask for camera permission.");
-                            }
-                        );
-                    }
-                    else
-                    {
-                        Log.Info(TAG, "Can just ask for permission.");
-
-                        // NOTE: Requesting under "Don't ask again" mode would immediate return Permission.Denied in result handler.
-                        //       Same if the device has a policy against allowing a given permission.
-                        RequestPermissions(new[] { Manifest.Permission.Camera }, ButtonClickCameraPermissionRequestCode);
-                    }
+                    // NOTE: Requesting under "Don't ask again" mode would immediate return Permission.Denied in result handler.
+                    //       Same if the device has a policy against allowing a given permission.
+                    RequestPermissions(new[] { Manifest.Permission.Camera }, ButtonClickCameraPermissionRequestCode);
                 }
-            }
-            else
-            {
-                Log.Info(TAG, "Already have permission.");
-
-                TakePicture();
             }
         }
 
