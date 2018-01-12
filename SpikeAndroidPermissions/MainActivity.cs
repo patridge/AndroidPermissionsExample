@@ -160,6 +160,8 @@ namespace SpikeAndroidPermissions
                         && grantResults[0] == Permission.Granted)
                     {
                         Log.Info(TAG, "Permission was granted on Android dialog.");
+
+                        TakePicture();
                     }
                     else
                     {
