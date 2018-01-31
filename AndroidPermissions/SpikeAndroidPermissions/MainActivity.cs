@@ -27,6 +27,8 @@ namespace SpikeAndroidPermissions
         // Docs: https://developer.android.com/reference/android/support/v4/app/ActivityCompat.html#requestPermissions(android.app.Activity, java.lang.String[], int)
         const int ButtonClickCameraPermissionRequestCode = 1;
         Button takePictureButton;
+        PermissionsHelpers cameraPermissionsHelper;
+        Task hasCameraPermissionTask;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -38,6 +40,13 @@ namespace SpikeAndroidPermissions
             takePictureButton.Click += delegate {
                 AskForCameraPermission();
             };
+
+            var cameraPermissionHelperConfiguration = PermissionsRequestConfiguration.Default;
+            cameraPermissionHelperConfiguration.RequestAlertMessage = "AwesomeCameraApp can't take pictures without permission to use the camera. Can we have permission to use your camera?";
+            cameraPermissionHelperConfiguration.RequestAlertPositiveButton = "Allow camera use";
+            cameraPermissionHelperConfiguration.RequestAlertNegativeResponseAlertAcknowledgementButton = "Without permission to use the camera, you can't take pictures.";
+            cameraPermissionsHelper = new PermissionsHelpers(this, new[] { Manifest.Permission.Camera }, PermissionsRequestConfiguration.Default);
+            hasCameraPermissionTask = cameraPermissionsHelper.PermissionGrantedTask;
         }
 
         public void ShowCameraPermissionRationale(Action allowAction, Action denyAction)
@@ -58,6 +67,7 @@ namespace SpikeAndroidPermissions
         }
         public void AskForCameraPermission()
         {
+
             if ((int)Build.VERSION.SdkInt < 23)
             {
                 Log.Info(TAG, "Pre-dates Android's new permission model. Installation _is_ permission.");
@@ -150,45 +160,9 @@ namespace SpikeAndroidPermissions
             });
         }
 
-        bool hasUserBlockedUsFromRequestingCameraPermission = false;
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
         {
-            switch (requestCode)
-            {
-                // Use a request code to know what to look for in the permissions/grantResult arrays.
-                case ButtonClickCameraPermissionRequestCode:
-                    if (permissions.Length == 0)
-                    {
-                        // TODO: How does one cancel? (Doesn't fire for home button and back button doesn't do anything.)
-                        Log.Info(TAG, "Request dialog was cancelled.");
-                        // TODO: Once we figure out how to trigger it, figure out what an app might do knowing it was cancelled.
-                    }
-                    if (permissions.Length > 0
-                        && grantResults[0] == Permission.Granted)
-                    {
-                        Log.Info(TAG, "Permission was granted on Android dialog.");
-
-                        TakePicture();
-                    }
-                    else
-                    {
-                        Log.Info(TAG, "Permission was denied on Android dialog or we were blocked from asking (or device policy forbids it).");
-
-                        if (!ShouldShowRequestPermissionRationale(Manifest.Permission.Camera))
-                        {
-                            Log.Info(TAG, "(And we were blocked from asking for permission through Android again without direct Settings intervention.)");
-
-                            hasUserBlockedUsFromRequestingCameraPermission = true;
-                        }
-
-                        // TODO: Potentially disable any functionality that relies on that denied permission.
-                    }
-                    break;
-                default:
-                    Log.Info(TAG, "Unknown permission request code.");
-                    break;
-            }
+            cameraPermissionsHelper.OnRequestPermissionsResult(requestCode, permissions, grantResults);
         }
     }
 }
-
